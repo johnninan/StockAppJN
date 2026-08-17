@@ -1,0 +1,417 @@
+I tightened the requirements, clarified the portfolio math, and added guardrails so the coding agent is less likely to make assumptions or build everything in one file.
+
+Build a production-quality **AI-powered Streamlit application** that acts as my **Personal Stock Analyst Agent** for tracking, analyzing, and discussing my **U.S. stock portfolio**.
+
+## Technology Requirements
+
+Use the following technologies:
+
+* **Python**
+* **Streamlit** for the UI
+* **yfinance** for current and historical U.S. stock market data
+* **Groq API** for LLM-powered analysis and chat
+* **Plotly** for interactive charts
+* **Pandas / NumPy** for data processing
+* **`uv` exclusively** for:
+
+  * Python package management
+  * Dependency installation
+  * Virtual environment management
+  * Running the application
+
+Do **not** use `pip`, Poetry, Conda, or other package managers.
+
+Store secrets such as the Groq API key in environment variables or `.env`. Never hard-code API keys.
+
+---
+
+# Application Requirements
+
+Create a Streamlit application with **4 tabs**:
+
+## Tab 1 — Data Upload
+
+Allow the user to upload a **CSV file containing stock transaction history**.
+
+There should be **no manual transaction entry**.
+
+Expected CSV columns:
+
+```text
+ticker,date,transaction_type,quantity,price
+```
+
+Example:
+
+```text
+AAPL,2024-01-10,Buy,10,185.20
+MSFT,2024-02-15,Buy,5,410.50
+AAPL,2024-06-20,Sell,3,210.00
+```
+
+Requirements:
+
+* Validate that all required columns exist.
+* Accept `Buy` and `Sell` transaction types case-insensitively.
+* Validate dates, quantities, and prices.
+* Reject or clearly flag invalid rows.
+* Normalize ticker symbols to uppercase.
+* Sort transactions chronologically before performing portfolio calculations.
+* Display the uploaded and validated DataFrame.
+* Show useful summary information such as:
+
+  * Number of transactions
+  * Number of unique tickers
+  * Earliest transaction
+  * Most recent transaction
+
+All other tabs should use the uploaded transaction history as their source of truth.
+
+---
+
+# Tab 2 — Consolidated Portfolio View
+
+Calculate the user's **current portfolio holdings** from the complete transaction history.
+
+Use **FIFO accounting** when processing sales.
+
+For every ticker calculate:
+
+* Ticker Symbol
+* Current Quantity
+* Remaining Cost Basis
+* Average Cost Basis
+* Current Market Price
+* Current Market Value
+* Unrealized Gain/Loss ($)
+* Unrealized Gain/Loss (%)
+
+Use **yfinance** to retrieve the latest available market price.
+
+### Portfolio Summary
+
+Display:
+
+* **Total Current Portfolio Value**
+* **Total Remaining Cost Basis**
+* **Total Unrealized Gain/Loss**
+* **Total Unrealized Gain/Loss %**
+
+### Portfolio Allocation
+
+Create an interactive **Plotly pie/donut chart** showing portfolio allocation based on **current market value**.
+
+Do not include positions whose current quantity is zero.
+
+### Holdings Table
+
+Display a clean table containing:
+
+| Ticker | Quantity | Avg Cost | Current Price | Market Value | Unrealized Gain/Loss | Gain/Loss % |
+| ------ | -------: | -------: | ------------: | -----------: | -------------------: | ----------: |
+
+Use appropriate currency and percentage formatting.
+
+### AI Portfolio Summary
+
+Send only the necessary calculated portfolio information to the **Groq LLM**.
+
+Generate a concise **2–3 sentence portfolio health summary** addressing:
+
+* Overall unrealized performance
+* Portfolio concentration
+* Largest holdings
+* Potential diversification risk
+
+The AI should provide analytical observations and **not present itself as a financial adviser or issue definitive buy/sell instructions**.
+
+---
+
+# Tab 3 — Historical Performance
+
+Analyze performance across the user's **entire transaction history**.
+
+Display metric cards for:
+
+### Total Investment
+
+Total cash spent on all Buy transactions:
+
+`quantity × purchase price`
+
+### Total Sell Proceeds
+
+Total cash received from all Sell transactions:
+
+`quantity × sale price`
+
+### Current Portfolio Value
+
+Current market value of all remaining positions.
+
+### Total Return
+
+Calculate portfolio-wide economic return as:
+
+`Total Sell Proceeds + Current Portfolio Value - Total Investment`
+
+Also calculate:
+
+`Total Return % = Total Return / Total Investment × 100`
+
+### XIRR
+
+Calculate **annualized XIRR** using the actual transaction dates.
+
+Cash-flow convention:
+
+* Buy transactions = negative cash flows
+* Sell transactions = positive cash flows
+* Current portfolio value = final positive cash flow dated today
+
+Implement XIRR robustly using an appropriate numerical root-solving method.
+
+Handle situations where XIRR cannot reasonably be calculated and display a useful message instead of crashing.
+
+### Historical Portfolio Chart
+
+Add an interactive chart showing portfolio value or cumulative performance through time.
+
+Where practical, reconstruct historical portfolio values using historical prices from yfinance.
+
+Clearly distinguish between:
+
+* Cash invested
+* Portfolio market value
+* Realized proceeds/performance
+
+---
+
+# Tab 4 — AI Analyst
+
+Create an interactive **Streamlit chat interface** powered by the **Groq API**.
+
+The AI analyst should automatically receive relevant portfolio context including:
+
+* Complete transaction history
+* Current holdings
+* Average cost basis
+* Current prices
+* Market values
+* Unrealized gains/losses
+* Lifetime purchases
+* Lifetime sales
+* Total return
+* XIRR
+* Portfolio concentration
+* Recent market performance when relevant
+
+The user should be able to ask questions such as:
+
+* "Summarize my historical trading performance."
+* "Which stocks have contributed the most to my gains?"
+* "What are my biggest losing positions?"
+* "Which position represents the largest concentration risk?"
+* "How diversified is my portfolio?"
+* "Why is my portfolio down today?"
+* "Which stocks performed best over the last month?"
+* "Compare my current holdings."
+* "What patterns do you see in my buying and selling history?"
+
+When answering questions involving recent stock movements, retrieve the required price/history data from **yfinance first**, then provide the relevant structured data to the LLM.
+
+The LLM must **not fabricate market prices, portfolio values, returns, news, or transaction information**.
+
+Use deterministic calculations in Python for financial metrics.
+Use the LLM primarily for **interpretation, summarization, and conversational analysis**.
+
+Maintain Streamlit session state so the conversation persists during the user's session.
+
+---
+
+# Portfolio Accounting Requirements
+
+Create reusable portfolio calculation logic.
+
+FIFO sales must work as follows:
+
+Example:
+
+```text
+Buy 10 AAPL @ $100
+Buy 10 AAPL @ $120
+Sell 12 AAPL @ $150
+```
+
+FIFO result:
+
+```text
+10 shares from the $100 lot are sold
+2 shares from the $120 lot are sold
+
+Remaining position:
+8 shares @ $120 cost basis
+```
+
+Also calculate **realized gain/loss** for sold shares internally so it can be used by the AI Analyst and future reporting.
+
+Handle:
+
+* Multiple purchases
+* Multiple sales
+* Partial lot sales
+* Fully closed positions
+* Transactions entered out of chronological order
+* Invalid sells where the quantity sold exceeds available holdings
+
+Flag invalid transaction histories instead of silently producing incorrect calculations.
+
+---
+
+# Project Structure
+
+Use clean separation of concerns.
+
+```text
+stock-analyst/
+│
+├── app.py
+├── pyproject.toml
+├── .env.example
+├── README.md
+├── sample_transactions.csv
+│
+├── utils/
+│   ├── __init__.py
+│   ├── data_processing.py
+│   ├── portfolio_math.py
+│   ├── market_data.py
+│   └── llm_agent.py
+│
+└── components/
+    ├── __init__.py
+    ├── data_upload.py
+    ├── portfolio_view.py
+    ├── historical_performance.py
+    └── ai_analyst.py
+```
+
+### File Responsibilities
+
+**app.py**
+
+* Streamlit configuration
+* Tab navigation
+* Session state initialization
+* High-level orchestration
+
+**utils/data_processing.py**
+
+* CSV validation
+* Data normalization
+* Transaction validation
+* Date parsing
+
+**utils/portfolio_math.py**
+
+* FIFO calculations
+* Cost basis
+* Current holdings
+* Realized gain/loss
+* Unrealized gain/loss
+* Total return
+* XIRR
+
+**utils/market_data.py**
+
+* yfinance integration
+* Latest prices
+* Historical prices
+* Error handling/caching
+
+**utils/llm_agent.py**
+
+* Groq API integration
+* Portfolio context preparation
+* System prompts
+* AI portfolio summary
+* Chat response generation
+
+**components/**
+
+* Keep Streamlit UI code for each tab separate from business logic.
+
+---
+
+# Performance and Reliability
+
+Use Streamlit caching appropriately:
+
+* `st.cache_data` for market-data calls where appropriate.
+* Avoid downloading identical yfinance data repeatedly.
+* Handle unavailable tickers or temporary API/network failures gracefully.
+* Display meaningful error messages instead of Python stack traces.
+* Do not allow one bad ticker to crash the entire portfolio.
+* Show loading indicators while retrieving market data or waiting for the Groq API.
+
+---
+
+# UI / UX
+
+Create a polished financial-dashboard appearance.
+
+Include:
+
+* Clear page title: **Personal Stock Analyst**
+* Sidebar with portfolio/file information
+* Metric cards
+* Interactive Plotly charts
+* Currency formatting
+* Percentage formatting
+* Green/red gain-loss indicators where appropriate
+* Responsive layout
+* Clear empty-state instructions before a CSV has been uploaded
+
+Do not overcomplicate the interface.
+
+---
+
+# Important Design Principles
+
+1. **Financial calculations must be performed in Python, not by the LLM.**
+2. **Never ask the LLM to calculate portfolio values, FIFO cost basis, returns, or XIRR.**
+3. The LLM should analyze only structured results generated by the application.
+4. Never hallucinate missing market or portfolio information.
+5. Gracefully handle unavailable market data.
+6. Make the architecture modular and easy to extend later.
+7. Avoid putting all application logic inside `app.py`.
+8. Use type hints and clear docstrings for important functions.
+9. Follow standard Python coding practices.
+10. Keep the first version simple enough to run locally without requiring a database.
+
+---
+
+# Deliverables
+
+Generate the **complete working project**, not pseudocode.
+
+Provide:
+
+1. Full project directory structure
+2. Complete source code for every file
+3. `pyproject.toml` configured for `uv`
+4. `.env.example`
+5. Example transaction CSV
+6. `README.md`
+7. Exact commands to install and run the project using `uv`
+
+The application should run with commands similar to:
+
+```bash
+uv sync
+uv run streamlit run app.py
+```
+
+Do not leave TODO placeholders for core functionality.
+
+Before completing the project, verify that imports, function names, file references, Streamlit session-state usage, and dependencies are internally consistent.

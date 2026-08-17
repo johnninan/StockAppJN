@@ -1,0 +1,6 @@
+ticker,date,transaction_type,quantity,price
+AAPL,2024-01-10,Buy,10,185.20
+MSFT,2024-02-15,Buy,5,410.50
+AAPL,2024-06-20,Sell,3,210.00
+NVDA,2024-07-01,Buy,8,123.54
+
